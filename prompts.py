@@ -124,7 +124,12 @@ Trainingen - Conduction heeft veel ervaring opgedaan rondom Common Ground ontwik
 
 
 def build_system_prompt(page_key: str) -> str:
-    """Return a system prompt tailored to a specific page, including reference content."""
+    """
+    Return a system prompt tailored to a specific page, including reference content.
+
+    @param page_key: Canonical page identifier (e.g., 'OVER_ONS', 'LINKEDIN').
+    @returns: Prompt string for the language model.
+    """
     reference = REFERENCE_CONTENT.get(page_key, REFERENCE_CONTENT["HOME"]) or ""
     if page_key == "LINKEDIN":
         return (
@@ -177,6 +182,12 @@ PAGE_TO_DISPLAY_KEY: Dict[str, str] = {
 }
 
 def detect_page_key(user_text: str) -> Optional[str]:
+    """
+    Detect the canonical page key from user-provided text.
+
+    @param user_text: Raw user text possibly containing a known keyword.
+    @returns: Matching page key or None if not found.
+    """
     text = (user_text or "").strip().lower()
     if not text:
         return None

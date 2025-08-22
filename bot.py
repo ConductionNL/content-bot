@@ -43,11 +43,20 @@ THREADS: Dict[str, Dict[str, Any]] = {}
 
 
 def _sleep_with_backoff(attempt_index: int) -> None:
+    """
+    @param attempt_index: Zero-based retry attempt index used to compute exponential backoff.
+    @returns: None
+    """
     delay = min(BACKOFF_BASE_SECONDS * (2 ** attempt_index) + random.uniform(0, 0.5), BACKOFF_MAX_SECONDS)
     time.sleep(delay)
 
 
 def _call_llm_with_retry(full_messages: List[dict]) -> str:
+    """
+    @param full_messages: Complete list of chat messages to send to the model, including system and conversation history.
+    @returns: Assistant response content as a stripped string.
+    @raises: APIError, APIConnectionError, RateLimitError, APITimeoutError on terminal failures after retries.
+    """
     last_error: Exception | None = None
     for attempt_index in range(OPENAI_MAX_RETRIES + 1):
         try:
@@ -77,7 +86,13 @@ def _call_llm_with_retry(full_messages: List[dict]) -> str:
 
 
 def generate_content(page_key: str, messages: List[dict]) -> str:
-    """Return Markdown draft based on a conversation history and page context."""
+    """
+    Return a Markdown draft based on a conversation history and page context.
+
+    @param page_key: Canonical page identifier used to build the system prompt.
+    @param messages: Conversation history as a list of role/content dicts.
+    @returns: Generated Markdown draft.
+    """
     full_messages = [
         {"role": "system", "content": build_system_prompt(page_key)}
     ] + messages
@@ -85,6 +100,14 @@ def generate_content(page_key: str, messages: List[dict]) -> str:
 
 @app.event("message")
 def on_dm_events(body, event, say):
+    """
+    Slack DM message event handler.
+
+    @param body: Raw Bolt request body.
+    @param event: Slack event payload dict for the message.
+    @param say: Callable to send a message back to Slack.
+    @returns: None
+    """
     if event.get("channel_type") != "im" or event.get("subtype") or event.get("bot_id"):
         return
     user_text = (event.get("text") or "").strip()
