@@ -1,3 +1,11 @@
+import logging
+logging.basicConfig(level=logging.DEBUG)  # console debug
+logging.getLogger("slack_bolt").setLevel(logging.DEBUG)
+logging.getLogger("slack_sdk").setLevel(logging.DEBUG)
+logging.getLogger("slack_sdk.socket_mode").setLevel(logging.DEBUG)
+logging.getLogger("websocket").setLevel(logging.DEBUG)  # websocket-client internals
+
+
 import os, sys, time, random
 import json
 from typing import Dict, List, Any
@@ -17,7 +25,7 @@ load_dotenv()
 APP_TOKEN = os.getenv("SLACK_APP_TOKEN")   # xapp-...
 BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")   # xoxb-...
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini") 
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini") 
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("LLM_BACKOFF_BASE_SECONDS", "1.0"))
@@ -34,6 +42,7 @@ if not OPENAI_API_KEY:
 oai = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT_SECONDS, max_retries=0)
 app = App(token=BOT_TOKEN)
 
+# Load Slack App Home tab Block Kit view from home.json.
 HOME_VIEW_PATH = os.path.join(os.path.dirname(__file__), "home.json")
 with open(HOME_VIEW_PATH, "r", encoding="utf-8") as f:
     HOME_VIEW = json.load(f)
@@ -63,8 +72,6 @@ def _call_llm_with_retry(full_messages: List[dict]) -> str:
             resp = oai.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=full_messages,
-                temperature=0.7,
-                max_tokens=900,
                 timeout=OPENAI_TIMEOUT_SECONDS,
             )
             return resp.choices[0].message.content.strip()
@@ -108,6 +115,10 @@ def on_dm_events(body, event, say):
     @param say: Callable to send a message back to Slack.
     @returns: None
     """
+    print(f"start {event['ts']} -> {time.time()}")
+        # first line in the listener
+    start_delay = time.time() - float(event.get("ts", "0"))
+    print(f"handler start delay: {start_delay:.3f}s")
     if event.get("channel_type") != "im" or event.get("subtype") or event.get("bot_id"):
         return
     user_text = (event.get("text") or "").strip()
@@ -178,6 +189,8 @@ def on_dm_events(body, event, say):
 
         # Check if we need to detect a page key
         if not state.get("page_key"):
+            print("T0 enter detect:", time.time())
+
             detected_page = detect_page_key(user_text)
             if detected_page:
                 state["page_key"] = detected_page
@@ -198,7 +211,7 @@ def on_dm_events(body, event, say):
                     "- Lengte/format (bijv. 3–7 zinnen, met CTA)\n\n"
                     "Je kunt de output daarna iteratief verbeteren door te reageren (bijv. 'korter', 'formeler/menselijker', 'voeg CTA toe', '3 varianten')."
                 )
-
+                print("T1 before say:", time.time())
                 say(channel=event["channel"], thread_ts=conversation_id, text=prompt_text)
                 return
             else:
@@ -238,4 +251,14 @@ def publish_home_tab(client, event, logger):
 
 if __name__ == "__main__":
     print("Connecting to Slack via Socket Mode…")
-    SocketModeHandler(app, APP_TOKEN).start()
+    handler = SocketModeHandler(
+        app,
+        APP_TOKEN,
+        auto_reconnect_enabled=True,
+        trace_enabled=True,
+        ping_pong_trace_enabled=True,
+        all_message_trace_enabled=False,
+        ping_interval=10,
+        concurrency=10,
+    )
+    handler.start()
