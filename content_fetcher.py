@@ -6,13 +6,12 @@ downstream consumption.
 """
 
 import os
-import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from urllib import request
 from urllib.parse import urljoin
-from urllib.error import HTTPError, URLError
 import trafilatura
 from bs4 import BeautifulSoup
+import logging
 
 WEBSITE_BASE_URL = os.getenv("WEBSITE_BASE_URL", "https://conduction.nl")
 
@@ -26,8 +25,6 @@ PAGE_TO_URL: Dict[str, str] = {
     "HOME": "/",
 }
 
-_CACHE: Dict[str, Tuple[float, str]] = {}
-_TTL_SECONDS: float = 3600.0
 
 def get_reference_content(page_key: str) -> str:
     """Return readable HTML content for a configured page key.
@@ -39,33 +36,20 @@ def get_reference_content(page_key: str) -> str:
     result = fetch_page_html(page_key)
     return result if result else ""
 
-def fetch_page_html(page_key: str) -> Optional[Tuple[str, str]]:
-    """Fetch a page by key, with simple in-memory caching and extraction.
 
-    If cached and non-empty, returns a tuple of ``(url, cached_html)``.
-    If fetched fresh, returns the extracted HTML string. Returns ``None``
-    on failure to resolve or fetch.
+def fetch_page_html(page_key: str) -> Optional[str]:
+    """Fetch a page by key, with simple extraction.
+
+    Returns the extracted HTML string, or ``None`` on failure
+    to resolve or fetch.
 
     @param page_key: Key in ``PAGE_TO_URL`` identifying which page to fetch.
-    @return: Either ``(url, html)`` when served from cache, the HTML string
-        when fetched fresh, or ``None`` on failure.
-    @rtype: Optional[Tuple[str, str]] or str
+    @return: Extracted HTML string on success, or ``None`` on failure.
+    @rtype: Optional[str]
     """
     url = _resolve_url(page_key)
     if not url:
         return None
-    now = time.time()
-    cache_key = f"live:{url}"
-    cached = _CACHE.get(cache_key)
-    if cached and (now - cached[0]) < _TTL_SECONDS:
-        cached_text = cached[1] or ""
-        if cached_text.strip():
-            return url, cached_text
-        # Invalidate empty cache entry and refetch
-        try:
-            del _CACHE[cache_key]
-        except Exception:
-            pass
     html_str = _http_get(url)
     if html_str is None:
         return None
@@ -97,7 +81,8 @@ def _http_get(url: str) -> Optional[str]:
         req = request.Request(url, headers={"User-Agent": "conduction-content-bot"})
         with request.urlopen(req, timeout=15) as resp:
             return resp.read().decode("utf-8", errors="ignore")
-    except Exception:
+    except Exception as e:
+        logging.exception(f"Error fetching page {url}: {e}")
         return None
 
 
@@ -130,7 +115,7 @@ def _extract_text_from_html(html_str: str) -> str:
     # add the header text to the content
     try:
         original = BeautifulSoup(html_str, "html.parser")
-        hero = original.select_one("header.hero, .heroBanner_qdFl, .hero")
+        hero = original.select_one("header.hero, .heroBanner_qdFl, .hero, .heroContainer_i2aB, [class*='hero'], header")
         if hero:
             header_tag = soup.new_tag("header")
 
@@ -161,17 +146,37 @@ def _extract_text_from_html(html_str: str) -> str:
                     child.extract()
                 for child in reversed(children):
                     soup.insert(0, child)
+        else:
+            # Fallback: if no hero found, include the first heading on the page
+            fallback_heading = original.find(["h1", "h2", "h3"])
+            if fallback_heading and fallback_heading.get_text(strip=True):
+                title_tag = soup.new_tag("h1")
+                title_tag.string = fallback_heading.get_text(strip=True)
+                soup.insert(0, title_tag)
 
     except Exception:
         # Best-effort enrichment; ignore failures and fall back to extracted content only
         pass
 
-    # 3) keep just basic content tags
+    # keep just basic content tags
     allowed = {"header", "p","h1","h2","h3","h4","h5","h6","ul","ol","li","strong","em","a","blockquote","pre","code","br"}
     for tag in list(soup.find_all(True)):
         if tag.name not in allowed:
             tag.unwrap()
         else:
             tag.attrs = {"href": tag.get("href")} if tag.name == "a" and tag.has_attr("href") else {}
+
+    # Remove everything from the Contact section onward (this is our footer)
+    try:
+        contact_header = soup.find(lambda t: t.name == "h2" and t.get_text(strip=True).lower() == "contact")
+        if contact_header:
+            # remove all siblings after the Contact header at the same level
+            for sibling in list(contact_header.next_siblings):
+                sibling.extract()
+            # remove the Contact header itself
+            contact_header.extract()
+    except Exception:
+        # Be permissive on failures; better to return content than crash
+        pass
 
     return str(soup)

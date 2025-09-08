@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 from content_fetcher import get_reference_content
 import os
 import json
+import logging
 
 # Reference content per page is stored in an external JSON file.
 def _load_reference_content() -> Dict[str, str]:
@@ -11,14 +12,15 @@ def _load_reference_content() -> Dict[str, str]:
             data = json.load(f)
         if isinstance(data, dict):
             return {str(k): str(v) for k, v in data.items()}
-    except Exception:
+    except Exception as e:
+        logging.exception(f"Error loading reference content: {e}")
         pass
     return {}
 
 REFERENCE_CONTENT: Dict[str, str] = _load_reference_content()
 
 
-def build_system_prompt(page_key: str) -> str:
+def build_system_prompt(page_key: str) -> Optional[str]:
     """
     Return a system prompt tailored to a specific page, including reference content.
 
@@ -28,9 +30,9 @@ def build_system_prompt(page_key: str) -> str:
     # Prefer live-site content; fallback to local reference strings
     try:
         live_reference = get_reference_content(page_key)
-        print(f"Live reference: {live_reference}")
-    except Exception:
-        live_reference = ""
+    except Exception as e:
+        logging.exception(f"Error fetching reference content: {e}")
+        return None
 
     reference = live_reference or REFERENCE_CONTENT.get(page_key) or REFERENCE_CONTENT.get("HOME", "")
     if page_key == "LINKEDIN":

@@ -12,6 +12,7 @@ from typing import Dict, List, Any
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from threading import RLock, Lock
 
 # --- Model wiring (OpenAI) ---
 try:
@@ -30,6 +31,7 @@ OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("LLM_BACKOFF_BASE_SECONDS", "1.0"))
 BACKOFF_MAX_SECONDS = float(os.getenv("LLM_BACKOFF_MAX_SECONDS", "15.0"))
+HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "10"))
 
 from prompts import build_system_prompt, detect_page_key, KEYWORD_TO_PAGE, PAGE_TO_DISPLAY_KEY
 
@@ -50,6 +52,18 @@ with open(HOME_VIEW_PATH, "r", encoding="utf-8") as f:
 # In-memory per-thread state: page_key + conversation history + waiting_for_content_description
 THREADS: Dict[str, Dict[str, Any]] = {}
 
+# Per-conversation locks to prevent race conditions on shared state
+CONV_LOCKS: Dict[str, RLock] = {}
+CONV_LOCKS_MASTER: Lock = Lock()
+
+def _get_conv_lock(conversation_id: str) -> RLock:
+    with CONV_LOCKS_MASTER:
+        lock = CONV_LOCKS.get(conversation_id)
+        if lock is None:
+            lock = RLock()
+            CONV_LOCKS[conversation_id] = lock
+        return lock
+
 
 def _sleep_with_backoff(attempt_index: int) -> None:
     """
@@ -58,6 +72,37 @@ def _sleep_with_backoff(attempt_index: int) -> None:
     """
     delay = min(BACKOFF_BASE_SECONDS * (2 ** attempt_index) + random.uniform(0, 0.5), BACKOFF_MAX_SECONDS)
     time.sleep(delay)
+
+
+def _cap_history(history: List[dict], max_messages: int | None = None) -> List[dict]:
+    """
+    Enforce a maximum number of messages in the conversation history.
+    Preserves the initial system message if present and keeps the most recent
+    messages after that, so the total length is at most ``max_messages``.
+    """
+    if max_messages is None:
+        max_messages = HISTORY_MAX_MESSAGES
+    if not history or max_messages <= 0:
+        return []
+    if history[0].get("role") == "system":
+        system_msg = history[0]
+        tail = history[1:]
+        keep = max_messages - 1
+        if keep <= 0:
+            return [system_msg]
+        return [system_msg] + tail[-keep:]
+    # No system message at index 0; just keep the last max_messages
+    return history[-max_messages:]
+
+
+def _format_code_block(text: str) -> str:
+    """Wrap text in a Slack code block, escaping embedded triple backticks.
+
+    Replaces occurrences of ``` inside the text with ``\u200b` to avoid
+    prematurely closing the fence.
+    """
+    safe_text = (text or "").replace("```", "``\u200b`")
+    return f"```{safe_text}```"
 
 
 def _call_llm_with_retry(full_messages: List[dict]) -> str:
@@ -74,7 +119,8 @@ def _call_llm_with_retry(full_messages: List[dict]) -> str:
                 messages=full_messages,
                 timeout=OPENAI_TIMEOUT_SECONDS,
             )
-            return resp.choices[0].message.content.strip()
+            content = resp.choices[0].message.content or ""
+            return content.strip()
         except (APITimeoutError, APIConnectionError, RateLimitError) as err:
             last_error = err
         except APIError as err:
@@ -92,33 +138,14 @@ def _call_llm_with_retry(full_messages: List[dict]) -> str:
     raise last_error
 
 
-def generate_content(page_key: str, messages: List[dict]) -> str:
-    """
-    Return a Markdown draft based on a conversation history and page context.
-
-    @param page_key: Canonical page identifier used to build the system prompt.
-    @param messages: Conversation history as a list of role/content dicts.
-    @returns: Generated Markdown draft.
-    """
-    full_messages = [
-        {"role": "system", "content": build_system_prompt(page_key)}
-    ] + messages
-    return _call_llm_with_retry(full_messages)
-
 @app.event("message")
-def on_dm_events(body, event, say):
+def on_dm_events(event, say):
     """
     Slack DM message event handler.
-
-    @param body: Raw Bolt request body.
     @param event: Slack event payload dict for the message.
     @param say: Callable to send a message back to Slack.
     @returns: None
     """
-    print(f"start {event['ts']} -> {time.time()}")
-        # first line in the listener
-    start_delay = time.time() - float(event.get("ts", "0"))
-    print(f"handler start delay: {start_delay:.3f}s")
     if event.get("channel_type") != "im" or event.get("subtype") or event.get("bot_id"):
         return
     user_text = (event.get("text") or "").strip()
@@ -127,6 +154,7 @@ def on_dm_events(body, event, say):
     try:
         # Determine conversation id: use the thread if present, otherwise start a new thread at this message's ts
         conversation_id = event.get("thread_ts") or event.get("ts")
+        conv_lock = _get_conv_lock(conversation_id)
 
         # Quick help
         if user_text.lower() in {"help", "hi", "hello", "hallo", "hulp"}:
@@ -152,7 +180,8 @@ def on_dm_events(body, event, say):
 
         # Reset current thread context on demand
         if user_text.lower() in {"reset", "new", "start over", "opnieuw", "nieuw"}:
-            THREADS[conversation_id] = {"page_key": None, "history": [], "waiting_for_content_description": False}
+            with conv_lock:
+                THREADS[conversation_id] = {"page_key": None, "history": [], "waiting_for_content_description": False, "page_content": None}
             keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
             say(
                 channel=event["channel"],
@@ -165,37 +194,77 @@ def on_dm_events(body, event, say):
             return
 
         # Initialize or update thread state
-        state = THREADS.get(conversation_id)
-        if not state:
-            state = {"page_key": None, "history": [], "waiting_for_content_description": False}
-            THREADS[conversation_id] = state
+        with conv_lock:
+            state = THREADS.get(conversation_id)
+            if not state:
+                state = {"page_key": None, "history": [], "waiting_for_content_description": False, "page_content": None}
+                THREADS[conversation_id] = state
 
         # Check if we're waiting for content description
         if state.get("waiting_for_content_description", False):
             # User provided content description, now generate content
             page_key = state.get("page_key")
             if page_key:
-                history: List[dict] = state.get("history", [])
-                history.append({"role": "user", "content": user_text})
-                draft = generate_content(page_key, history)
-                history.append({"role": "assistant", "content": draft})
-                state["history"] = history
-                state["waiting_for_content_description"] = False
-                THREADS[conversation_id] = state
+                with conv_lock:
+                    history: List[dict] = state.get("history", [])
+                    if not history:
+                        history.append({"role": "system", "content": state["page_content"]})
+                    history.append({"role": "user", "content": user_text})
+                    history = _cap_history(history)
+                    state["history"] = history
+
+                draft = _call_llm_with_retry(history) # generate_content(page_key, history)
+
+                with conv_lock:
+                    history.append({"role": "assistant", "content": draft})
+                    history = _cap_history(history)
+                    state["history"] = history
+                    state["waiting_for_content_description"] = False
+                    THREADS[conversation_id] = state
 
                 # Send as a code block so formatting is preserved, in thread
-                say(channel=event["channel"], thread_ts=conversation_id, text=f"```{draft}```")
-            return
+                say(channel=event["channel"], thread_ts=conversation_id, text=_format_code_block(draft))
+                return
+            else:
+                # Missing page key; reset waiting flag and prompt for a keyword again
+                with conv_lock:
+                    state["waiting_for_content_description"] = False
+                    THREADS[conversation_id] = state
+                keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                say(
+                    channel=event["channel"],
+                    thread_ts=conversation_id,
+                    text=(
+                        "Ik kon het opgegeven keyword niet vinden. "
+                        "Kies eerst een keyword en probeer het opnieuw.\n\n"
+                        f"Beschikbare keywords: {keywords_overview}"
+                    ),
+                )
+                return
 
         # Check if we need to detect a page key
         if not state.get("page_key"):
-            print("T0 enter detect:", time.time())
 
             detected_page = detect_page_key(user_text)
             if detected_page:
-                state["page_key"] = detected_page
-                state["waiting_for_content_description"] = True
-                THREADS[conversation_id] = state
+                page_content = build_system_prompt(detected_page)
+                # If we couldn't build content for the detected page, inform the user and ask to pick another keyword
+                if page_content is None:
+                    keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                    say(
+                        channel=event["channel"],
+                        thread_ts=conversation_id,
+                        text=(
+                            "Ik kon geen content vinden voor deze pagina. Kies alsjeblieft een ander keyword.\n\n"
+                            f"Beschikbare keywords: {keywords_overview}"
+                        ),
+                    )
+                    return
+                with conv_lock:
+                    state["page_key"] = detected_page
+                    state["page_content"] = page_content
+                    state["waiting_for_content_description"] = True
+                    THREADS[conversation_id] = state
                 
                 # Ask for content description (NL) with only a small title difference
                 page_name = detected_page.lower().replace('_', ' ')
@@ -211,7 +280,6 @@ def on_dm_events(body, event, say):
                     "- Lengte/format (bijv. 3–7 zinnen, met CTA)\n\n"
                     "Je kunt de output daarna iteratief verbeteren door te reageren (bijv. 'korter', 'formeler/menselijker', 'voeg CTA toe', '3 varianten')."
                 )
-                print("T1 before say:", time.time())
                 say(channel=event["channel"], thread_ts=conversation_id, text=prompt_text)
                 return
             else:
@@ -228,17 +296,27 @@ def on_dm_events(body, event, say):
                 return
         
         # Continue existing conversation (page key already set, not waiting for description)
-        history: List[dict] = state.get("history", [])
-        history.append({"role": "user", "content": user_text})
-        draft = generate_content(state["page_key"], history)
-        history.append({"role": "assistant", "content": draft})
-        state["history"] = history
-        THREADS[conversation_id] = state
+        with conv_lock:
+            history: List[dict] = state.get("history", [])
+            if not history:
+                history.append({"role": "system", "content": state["page_content"]})
+            history.append({"role": "user", "content": user_text})
+            history = _cap_history(history)
+            state["history"] = history
+
+        draft = _call_llm_with_retry(history) # generate_content(state["page_key"], history)
+
+        with conv_lock:
+            history.append({"role": "assistant", "content": draft})
+            history = _cap_history(history)
+            state["history"] = history
+            THREADS[conversation_id] = state
 
         # Send as a code block so formatting is preserved, in thread
-        say(channel=event["channel"], thread_ts=conversation_id, text=f"```{draft}```")
+        say(channel=event["channel"], thread_ts=conversation_id, text=_format_code_block(draft))
     except Exception as e:
-        say(channel=event["channel"], thread_ts=event.get("thread_ts") or event.get("ts"), text=f"Sorry, I couldn’t generate that ({e}). Try again.")
+        say(channel=event["channel"], thread_ts=event.get("thread_ts") or event.get("ts"), text=f"Sorry, I couldn’t generate that. Please try again.")
+        logging.exception(f"Error generating content: {e}")
 
 @app.event("app_home_opened")
 def publish_home_tab(client, event, logger):
@@ -250,13 +328,12 @@ def publish_home_tab(client, event, logger):
         logger.exception("Failed to publish Home tab")
 
 if __name__ == "__main__":
-    print("Connecting to Slack via Socket Mode…")
     handler = SocketModeHandler(
         app,
         APP_TOKEN,
         auto_reconnect_enabled=True,
-        trace_enabled=True,
-        ping_pong_trace_enabled=True,
+        trace_enabled=False,
+        ping_pong_trace_enabled=False,
         all_message_trace_enabled=False,
         ping_interval=10,
         concurrency=10,
