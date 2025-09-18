@@ -1,8 +1,9 @@
 from typing import Dict, List, Optional
-from content_fetcher import get_reference_content
+from .content_fetcher import get_reference_content
 import os
 import json
 import logging
+
 
 # Reference content per page is stored in an external JSON file.
 def _load_reference_content() -> Dict[str, str]:
@@ -16,6 +17,7 @@ def _load_reference_content() -> Dict[str, str]:
         logging.exception(f"Error loading reference content: {e}")
         pass
     return {}
+
 
 REFERENCE_CONTENT: Dict[str, str] = _load_reference_content()
 
@@ -34,7 +36,11 @@ def build_system_prompt(page_key: str) -> Optional[str]:
         logging.exception(f"Error fetching reference content: {e}")
         return None
 
-    reference = live_reference or REFERENCE_CONTENT.get(page_key) or REFERENCE_CONTENT.get("HOME", "")
+    reference = (
+        live_reference
+        or REFERENCE_CONTENT.get(page_key)
+        or REFERENCE_CONTENT.get("HOME", "")
+    )
     if page_key == "LINKEDIN":
         return (
             "Schrijf een korte LinkedIn-post in het Nederlands, menselijk en to-the-point. "
@@ -84,6 +90,7 @@ PAGE_TO_DISPLAY_KEY: Dict[str, str] = {
     "LINKEDIN": "linkedin",
     "HOME": "home",
 }
+
 
 def detect_page_key(user_text: str) -> Optional[str]:
     """

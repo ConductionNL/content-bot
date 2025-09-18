@@ -1,0 +1,102 @@
+{
+    "type": "home",
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Conduction Content Bot",
+                "emoji": true
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Quick start*\n1. DM a keyword: *over ons*, *beheer*, *projecten*, *common ground*, *trainingen*, *linkedin post*.\n2. When asked, describe audience, goal, key points, tone, length.\n3. Receive a Markdown draft.\n4. Refine by replying (e.g., _shorter_, _more formal_, _add CTA/Nextcloud_)."
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Supported keywords*\n`over ons`, `beheer`, `projecten`, `common ground`, `trainingen`, `contact`, `linkedin`, `home`"
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Commands*\n• `help` — tips and keywords\n• `reset` — clear context\n• New topic? Start a new DM message (not a thread reply)."
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Best-practice brief*\n• Audience: who is it for\n• Goal: inform, invite contact, announce\n• Must-include: products, links, numbers\n• Tone: formal, friendly, concise\n• Length: 3–7 sentences, include CTA"
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Good prompt examples*\n> over ons — Schrijf over onze mensgerichte cultuur, open source, en teamkwaliteiten. Kort, vriendelijk, zonder jargon, met uitnodiging om contact op te nemen.\n> beheer — Focus op Nextcloud, Common Ground, SLA en ontzorging. Professioneel, 5–7 zinnen, eindig met CTA.\n> linkedin post — Deel dat we ISO 27001/9001 hebben behaald, bedank team en auditor, voeg 1 link en een vraag toe, geen buzzwords."
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Iterating*\n• Be specific with changes: _shorter_, _more formal_, _add CTA/Nextcloud_.\n• Ask for variants: _give me 3 options with different openers_.\n• To switch pages: type `reset` or start a new DM thread."
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Privacy*\n• Plak geen gevoelige persoonsgegevens.\n• De bot gebruikt per-thread geheugen; scheid onderwerpen in aparte threads."
+            }
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Troubleshooting*\n• “Ik kon geen keyword herkennen.” → start with a keyword (e.g., `beheer ...`).\n• Wrong page or switching pages → type `reset` or start a new DM.\n• Output too generic → give a richer brief.\n• Too long → ask for shorter output."
+            }
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Admin: update keywords and reference tone in `prompts.py`."
+                }
+            ]
+        }
+    ]
+}

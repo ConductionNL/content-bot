@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "conduction-content-bot"
+version = "0.1.0"
+description = "Slack bot that drafts Dutch content for website pages and LinkedIn posts"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Conduction" }
+]
+dependencies = [
+  "slack_bolt>=1.18.0",
+  "openai>=1.37.0",
+  "beautifulsoup4>=4.12.0",
+  "trafilatura>=1.9.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+  "black>=24.3.0",
+  "pytest>=8.0.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I"]
+

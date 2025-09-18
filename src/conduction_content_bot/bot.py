@@ -1,4 +1,5 @@
 import logging
+
 logging.basicConfig(level=logging.DEBUG)  # console debug
 logging.getLogger("slack_bolt").setLevel(logging.DEBUG)
 logging.getLogger("slack_sdk").setLevel(logging.DEBUG)
@@ -9,36 +10,47 @@ logging.getLogger("websocket").setLevel(logging.DEBUG)  # websocket-client inter
 import os, sys, time, random
 import json
 from typing import Dict, List, Any
-from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from threading import RLock, Lock
 
 # --- Model wiring (OpenAI) ---
 try:
-    from openai import OpenAI, APIError, APIConnectionError, RateLimitError, APITimeoutError
+    from openai import (
+        OpenAI,
+        APIError,
+        APIConnectionError,
+        RateLimitError,
+        APITimeoutError,
+    )
 except Exception:
     print("Install the OpenAI SDK: pip install openai", file=sys.stderr)
     raise
 
-load_dotenv()
 
-APP_TOKEN = os.getenv("SLACK_APP_TOKEN")   # xapp-...
-BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")   # xoxb-...
+APP_TOKEN = os.getenv("SLACK_APP_TOKEN")  # xapp-...
+BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")  # xoxb-...
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini") 
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
 OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("LLM_BACKOFF_BASE_SECONDS", "1.0"))
 BACKOFF_MAX_SECONDS = float(os.getenv("LLM_BACKOFF_MAX_SECONDS", "15.0"))
 HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "10"))
 
-from prompts import build_system_prompt, detect_page_key, KEYWORD_TO_PAGE, PAGE_TO_DISPLAY_KEY
+from .prompts import (
+    build_system_prompt,
+    detect_page_key,
+    KEYWORD_TO_PAGE,
+    PAGE_TO_DISPLAY_KEY,
+)
 
 if not APP_TOKEN or not BOT_TOKEN:
-    print("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in .env", file=sys.stderr); sys.exit(1)
+    print("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in environment", file=sys.stderr)
+    sys.exit(1)
 if not OPENAI_API_KEY:
-    print("Missing OPENAI_API_KEY in .env", file=sys.stderr); sys.exit(1)
+    print("Missing OPENAI_API_KEY in environment", file=sys.stderr)
+    sys.exit(1)
 
 # Use client without internal retries; rely on our own retry wrapper for full control
 oai = OpenAI(api_key=OPENAI_API_KEY, timeout=OPENAI_TIMEOUT_SECONDS, max_retries=0)
@@ -56,6 +68,7 @@ THREADS: Dict[str, Dict[str, Any]] = {}
 CONV_LOCKS: Dict[str, RLock] = {}
 CONV_LOCKS_MASTER: Lock = Lock()
 
+
 def _get_conv_lock(conversation_id: str) -> RLock:
     with CONV_LOCKS_MASTER:
         lock = CONV_LOCKS.get(conversation_id)
@@ -70,7 +83,10 @@ def _sleep_with_backoff(attempt_index: int) -> None:
     @param attempt_index: Zero-based retry attempt index used to compute exponential backoff.
     @returns: None
     """
-    delay = min(BACKOFF_BASE_SECONDS * (2 ** attempt_index) + random.uniform(0, 0.5), BACKOFF_MAX_SECONDS)
+    delay = min(
+        BACKOFF_BASE_SECONDS * (2**attempt_index) + random.uniform(0, 0.5),
+        BACKOFF_MAX_SECONDS,
+    )
     time.sleep(delay)
 
 
@@ -158,7 +174,9 @@ def on_dm_events(event, say):
 
         # Quick help
         if user_text.lower() in {"help", "hi", "hello", "hallo", "hulp"}:
-            keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+            keywords_overview = ", ".join(
+                f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys()
+            )
             say(
                 channel=event["channel"],
                 thread_ts=conversation_id,
@@ -181,8 +199,15 @@ def on_dm_events(event, say):
         # Reset current thread context on demand
         if user_text.lower() in {"reset", "new", "start over", "opnieuw", "nieuw"}:
             with conv_lock:
-                THREADS[conversation_id] = {"page_key": None, "history": [], "waiting_for_content_description": False, "page_content": None}
-            keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                THREADS[conversation_id] = {
+                    "page_key": None,
+                    "history": [],
+                    "waiting_for_content_description": False,
+                    "page_content": None,
+                }
+            keywords_overview = ", ".join(
+                f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys()
+            )
             say(
                 channel=event["channel"],
                 thread_ts=conversation_id,
@@ -197,7 +222,12 @@ def on_dm_events(event, say):
         with conv_lock:
             state = THREADS.get(conversation_id)
             if not state:
-                state = {"page_key": None, "history": [], "waiting_for_content_description": False, "page_content": None}
+                state = {
+                    "page_key": None,
+                    "history": [],
+                    "waiting_for_content_description": False,
+                    "page_content": None,
+                }
                 THREADS[conversation_id] = state
 
         # Check if we're waiting for content description
@@ -208,12 +238,16 @@ def on_dm_events(event, say):
                 with conv_lock:
                     history: List[dict] = state.get("history", [])
                     if not history:
-                        history.append({"role": "system", "content": state["page_content"]})
+                        history.append(
+                            {"role": "system", "content": state["page_content"]}
+                        )
                     history.append({"role": "user", "content": user_text})
                     history = _cap_history(history)
                     state["history"] = history
 
-                draft = _call_llm_with_retry(history) # generate_content(page_key, history)
+                draft = _call_llm_with_retry(
+                    history
+                )  # generate_content(page_key, history)
 
                 with conv_lock:
                     history.append({"role": "assistant", "content": draft})
@@ -223,14 +257,21 @@ def on_dm_events(event, say):
                     THREADS[conversation_id] = state
 
                 # Send as a code block so formatting is preserved, in thread
-                say(channel=event["channel"], thread_ts=conversation_id, text=_format_code_block(draft))
+                say(
+                    channel=event["channel"],
+                    thread_ts=conversation_id,
+                    text=_format_code_block(draft),
+                )
                 return
             else:
                 # Missing page key; reset waiting flag and prompt for a keyword again
                 with conv_lock:
                     state["waiting_for_content_description"] = False
                     THREADS[conversation_id] = state
-                keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                keywords_overview = ", ".join(
+                    f"`{PAGE_TO_DISPLAY_KEY[page]}`"
+                    for page in PAGE_TO_DISPLAY_KEY.keys()
+                )
                 say(
                     channel=event["channel"],
                     thread_ts=conversation_id,
@@ -250,7 +291,10 @@ def on_dm_events(event, say):
                 page_content = build_system_prompt(detected_page)
                 # If we couldn't build content for the detected page, inform the user and ask to pick another keyword
                 if page_content is None:
-                    keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                    keywords_overview = ", ".join(
+                        f"`{PAGE_TO_DISPLAY_KEY[page]}`"
+                        for page in PAGE_TO_DISPLAY_KEY.keys()
+                    )
                     say(
                         channel=event["channel"],
                         thread_ts=conversation_id,
@@ -265,11 +309,15 @@ def on_dm_events(event, say):
                     state["page_content"] = page_content
                     state["waiting_for_content_description"] = True
                     THREADS[conversation_id] = state
-                
+
                 # Ask for content description (NL) with only a small title difference
-                page_name = detected_page.lower().replace('_', ' ')
+                page_name = detected_page.lower().replace("_", " ")
                 is_linkedin = detected_page == "LINKEDIN"
-                titel = "een LinkedIn-post" if is_linkedin else f"content voor de pagina `{page_name}`"
+                titel = (
+                    "een LinkedIn-post"
+                    if is_linkedin
+                    else f"content voor de pagina `{page_name}`"
+                )
                 prompt_text = (
                     f"Hoi! Ik help je met het schrijven van {titel}.\n\n"
                     "Vertel kort waar de content over moet gaan. Geef bij voorkeur:\n"
@@ -280,21 +328,28 @@ def on_dm_events(event, say):
                     "- Lengte/format (bijv. 3–7 zinnen, met CTA)\n\n"
                     "Je kunt de output daarna iteratief verbeteren door te reageren (bijv. 'korter', 'formeler/menselijker', 'voeg CTA toe', '3 varianten')."
                 )
-                say(channel=event["channel"], thread_ts=conversation_id, text=prompt_text)
+                say(
+                    channel=event["channel"],
+                    thread_ts=conversation_id,
+                    text=prompt_text,
+                )
                 return
             else:
                 # No page key detected, ask for clarification (NL) and show available keywords
-                keywords_overview = ", ".join(f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys())
+                keywords_overview = ", ".join(
+                    f"`{PAGE_TO_DISPLAY_KEY[page]}`"
+                    for page in PAGE_TO_DISPLAY_KEY.keys()
+                )
                 say(
                     channel=event["channel"],
                     thread_ts=conversation_id,
                     text=(
                         "Ik kon geen keyword herkennen. Start je bericht met een keyword om de pagina te kiezen waarvoor we content gaan genereren.\n\n"
                         f"Herkende keywords: {keywords_overview}"
-                    )
+                    ),
                 )
                 return
-        
+
         # Continue existing conversation (page key already set, not waiting for description)
         with conv_lock:
             history: List[dict] = state.get("history", [])
@@ -304,7 +359,9 @@ def on_dm_events(event, say):
             history = _cap_history(history)
             state["history"] = history
 
-        draft = _call_llm_with_retry(history) # generate_content(state["page_key"], history)
+        draft = _call_llm_with_retry(
+            history
+        )  # generate_content(state["page_key"], history)
 
         with conv_lock:
             history.append({"role": "assistant", "content": draft})
@@ -313,21 +370,21 @@ def on_dm_events(event, say):
             THREADS[conversation_id] = state
 
         # Send as a code block so formatting is preserved, in thread
-        say(channel=event["channel"], thread_ts=conversation_id, text=_format_code_block(draft))
+        say(
+            channel=event["channel"],
+            thread_ts=conversation_id,
+            text=_format_code_block(draft),
+        )
     except Exception as e:
-        say(channel=event["channel"], thread_ts=event.get("thread_ts") or event.get("ts"), text=f"Sorry, I couldn’t generate that. Please try again.")
+        say(
+            channel=event["channel"],
+            thread_ts=event.get("thread_ts") or event.get("ts"),
+            text=f"Sorry, I couldn’t generate that. Please try again.",
+        )
         logging.exception(f"Error generating content: {e}")
 
-@app.event("app_home_opened")
-def publish_home_tab(client, event, logger):
-    if event.get("tab") != "home":
-        return
-    try:
-        client.views_publish(user_id=event["user"], view=HOME_VIEW)
-    except Exception:
-        logger.exception("Failed to publish Home tab")
 
-if __name__ == "__main__":
+def main() -> None:
     handler = SocketModeHandler(
         app,
         APP_TOKEN,
@@ -339,3 +396,7 @@ if __name__ == "__main__":
         concurrency=10,
     )
     handler.start()
+
+
+if __name__ == "__main__":
+    main()

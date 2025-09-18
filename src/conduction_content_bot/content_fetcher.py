@@ -56,6 +56,7 @@ def fetch_page_html(page_key: str) -> Optional[str]:
     text = _extract_text_from_html(html_str)
     return text
 
+
 def _resolve_url(page_key: str) -> Optional[str]:
     """Resolve a page key to an absolute URL.
 
@@ -69,6 +70,7 @@ def _resolve_url(page_key: str) -> Optional[str]:
     if target.startswith("http://") or target.startswith("https://"):
         return target
     return urljoin(WEBSITE_BASE_URL.rstrip("/") + "/", target.lstrip("/"))
+
 
 def _http_get(url: str) -> Optional[str]:
     """Perform a simple HTTP GET using a custom User-Agent.
@@ -115,7 +117,9 @@ def _extract_text_from_html(html_str: str) -> str:
     # add the header text to the content
     try:
         original = BeautifulSoup(html_str, "html.parser")
-        hero = original.select_one("header.hero, .heroBanner_qdFl, .hero, .heroContainer_i2aB, [class*='hero'], header")
+        hero = original.select_one(
+            "header.hero, .heroBanner_qdFl, .hero, .heroContainer_i2aB, [class*='hero'], header"
+        )
         if hero:
             header_tag = soup.new_tag("header")
 
@@ -159,16 +163,41 @@ def _extract_text_from_html(html_str: str) -> str:
         pass
 
     # keep just basic content tags
-    allowed = {"header", "p","h1","h2","h3","h4","h5","h6","ul","ol","li","strong","em","a","blockquote","pre","code","br"}
+    allowed = {
+        "header",
+        "p",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "ul",
+        "ol",
+        "li",
+        "strong",
+        "em",
+        "a",
+        "blockquote",
+        "pre",
+        "code",
+        "br",
+    }
     for tag in list(soup.find_all(True)):
         if tag.name not in allowed:
             tag.unwrap()
         else:
-            tag.attrs = {"href": tag.get("href")} if tag.name == "a" and tag.has_attr("href") else {}
+            tag.attrs = (
+                {"href": tag.get("href")}
+                if tag.name == "a" and tag.has_attr("href")
+                else {}
+            )
 
     # Remove everything from the Contact section onward (this is our footer)
     try:
-        contact_header = soup.find(lambda t: t.name == "h2" and t.get_text(strip=True).lower() == "contact")
+        contact_header = soup.find(
+            lambda t: t.name == "h2" and t.get_text(strip=True).lower() == "contact"
+        )
         if contact_header:
             # remove all siblings after the Contact header at the same level
             for sibling in list(contact_header.next_siblings):

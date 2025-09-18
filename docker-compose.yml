@@ -1,0 +1,18 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: dockerfile
+    network_mode: "host"
+    image: conduction-content-bot:latest
+    container_name: conduction-content-bot
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      MAX_REFERENCE_CHARS: ${MAX_REFERENCE_CHARS}
+      WEB_FETCH_TTL_SECONDS: ${WEB_FETCH_TTL_SECONDS}
+      HISTORY_MAX_MESSAGES: ${HISTORY_MAX_MESSAGES}
+      WEBSITE_BASE_URL: ${WEBSITE_BASE_URL}
