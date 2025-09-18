@@ -46,7 +46,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-.env
-.venv/
-.__pycache__/
