@@ -11,10 +11,13 @@ spec:
   policyTypes:
     - Egress
   egress:
-    - to:
+    -
+{{- if .Values.networkPolicy.egress.toCIDRs }}
+      to:
 {{- range .Values.networkPolicy.egress.toCIDRs }}
         - ipBlock:
             cidr: {{ . }}
+{{- end }}
 {{- end }}
       ports:
 {{- range .Values.networkPolicy.egress.ports }}

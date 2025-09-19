@@ -57,7 +57,7 @@ tolerations: []
 affinity: {}
 
 networkPolicy:
-  enabled: false
+  enabled: true
   egress:
     ports:
       - port: 443
