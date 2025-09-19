@@ -29,15 +29,26 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      securityContext:
+{{ toYaml .Values.podSecurityContext | indent 8 }}
       containers:
         - name: content-bot
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+{{ toYaml .Values.securityContext | indent 12 }}
           env:
           {{- range $k, $v := .Values.env }}
             - name: {{ $k }}
               value: "{{ $v }}"
           {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+              readOnly: false
           resources:
 {{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
 

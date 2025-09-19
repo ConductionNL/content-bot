@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "content-bot.fullname" . }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "content-bot.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+{{- range .Values.networkPolicy.egress.toCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+{{- end }}
+      ports:
+{{- range .Values.networkPolicy.egress.ports }}
+        - protocol: {{ .protocol }}
+          port: {{ .port }}
+{{- end }}
+{{- end }}
+
