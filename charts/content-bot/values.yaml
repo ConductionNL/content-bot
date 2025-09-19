@@ -23,7 +23,7 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
-env: {}
+env:
   # Required secrets (set via ArgoCD/ExternalSecrets, don't commit real values):
   # SLACK_APP_TOKEN: xapp-...
   # SLACK_BOT_TOKEN: xoxb-...
