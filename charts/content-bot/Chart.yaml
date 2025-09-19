@@ -1,0 +1,7 @@
+apiVersion: v2
+name: content-bot
+description: Slack content bot (Socket Mode) for Dutch website/LinkedIn drafts
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

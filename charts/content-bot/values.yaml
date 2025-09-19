@@ -1,0 +1,32 @@
+image:
+  repository: ghcr.io/conductionnl/conduction-content-bot
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+podAnnotations: {}
+
+env: {}
+  # SLACK_APP_TOKEN: xapp-...
+  # SLACK_BOT_TOKEN: xoxb-...
+  # OPENAI_API_KEY: sk-...
+  # OPENAI_MODEL: gpt-5-mini
+  # WEBSITE_BASE_URL: https://conduction.nl
+
+resources: {}
+  # limits:
+  #   cpu: 200m
+  #   memory: 256Mi
+  # requests:
+  #   cpu: 50m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
