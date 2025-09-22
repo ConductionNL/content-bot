@@ -1,8 +1,9 @@
-from typing import Dict, List, Optional
-from .content_fetcher import get_reference_content
-import os
 import json
 import logging
+import os
+from typing import Dict, List, Optional
+
+from .content_fetcher import get_reference_content
 
 
 # Reference content per page is stored in an external JSON file.
@@ -37,9 +38,7 @@ def build_system_prompt(page_key: str) -> Optional[str]:
         return None
 
     reference = (
-        live_reference
-        or REFERENCE_CONTENT.get(page_key)
-        or REFERENCE_CONTENT.get("HOME", "")
+        live_reference or REFERENCE_CONTENT.get(page_key) or REFERENCE_CONTENT.get("HOME", "")
     )
     if page_key == "LINKEDIN":
         return (
@@ -50,11 +49,14 @@ def build_system_prompt(page_key: str) -> Optional[str]:
         )
     # Unified prompt for all website pagina's (niet-LinkedIn)
     return (
-        "Schrijf een compacte paragraaf (Markdown) die past bij de gekozen website-pagina. "
-        "Schrijf aanvullend op de bestaande inhoud: voeg nieuwe, relevante informatie toe die logisch in de huidige context past. "
+        "Schrijf een compacte paragraaf (Markdown) die past bij de gekozen"
+        " website-pagina. "
+        "Schrijf aanvullend op de bestaande inhoud: voeg nieuwe, relevante"
+        " informatie toe die logisch in de huidige context past. "
         "Vermijd herhaling van informatie die al op de pagina staat. "
         "Tone-of-voice: helder, nuchter, professioneel maar menselijk. "
-        "Geef de output in Markdown. LET OP: de voorbeeldtekst is in html maar de output moet in markdown zijn.\n\n"
+        "Geef de output in Markdown. LET OP: de voorbeeldtekst is in html maar"
+        " de output moet in markdown zijn.\n\n"
         f"Referentie:\n{reference}"
     )
 

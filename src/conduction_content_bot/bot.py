@@ -1,27 +1,23 @@
-import logging
-
-logging.basicConfig(level=logging.DEBUG)  # console debug
-logging.getLogger("slack_bolt").setLevel(logging.DEBUG)
-logging.getLogger("slack_sdk").setLevel(logging.DEBUG)
-logging.getLogger("slack_sdk.socket_mode").setLevel(logging.DEBUG)
-logging.getLogger("websocket").setLevel(logging.DEBUG)  # websocket-client internals
-
-
-import os, sys, time, random
 import json
-from typing import Dict, List, Any
+import logging
+import os
+import random
+import sys
+import time
+from threading import Lock, RLock
+from typing import Any, Dict, List
+
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from threading import RLock, Lock
 
 # --- Model wiring (OpenAI) ---
 try:
     from openai import (
-        OpenAI,
-        APIError,
         APIConnectionError,
-        RateLimitError,
+        APIError,
         APITimeoutError,
+        OpenAI,
+        RateLimitError,
     )
 except Exception:
     print("Install the OpenAI SDK: pip install openai", file=sys.stderr)
@@ -38,12 +34,7 @@ BACKOFF_BASE_SECONDS = float(os.getenv("LLM_BACKOFF_BASE_SECONDS", "1.0"))
 BACKOFF_MAX_SECONDS = float(os.getenv("LLM_BACKOFF_MAX_SECONDS", "15.0"))
 HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "10"))
 
-from .prompts import (
-    build_system_prompt,
-    detect_page_key,
-    KEYWORD_TO_PAGE,
-    PAGE_TO_DISPLAY_KEY,
-)
+from .prompts import PAGE_TO_DISPLAY_KEY, build_system_prompt, detect_page_key
 
 if not APP_TOKEN or not BOT_TOKEN:
     print("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in environment", file=sys.stderr)
@@ -80,7 +71,8 @@ def _get_conv_lock(conversation_id: str) -> RLock:
 
 def _sleep_with_backoff(attempt_index: int) -> None:
     """
-    @param attempt_index: Zero-based retry attempt index used to compute exponential backoff.
+    @param attempt_index: Zero-based retry attempt index used to compute
+    exponential backoff.
     @returns: None
     """
     delay = min(
@@ -123,9 +115,11 @@ def _format_code_block(text: str) -> str:
 
 def _call_llm_with_retry(full_messages: List[dict]) -> str:
     """
-    @param full_messages: Complete list of chat messages to send to the model, including system and conversation history.
+    @param full_messages: Complete list of chat messages to send to the model,
+    including system and conversation history.
     @returns: Assistant response content as a stripped string.
-    @raises: APIError, APIConnectionError, RateLimitError, APITimeoutError on terminal failures after retries.
+    @raises: APIError, APIConnectionError, RateLimitError, APITimeoutError on
+    terminal failures after retries.
     """
     last_error: Exception | None = None
     for attempt_index in range(OPENAI_MAX_RETRIES + 1):
@@ -168,7 +162,8 @@ def on_dm_events(event, say):
     if not user_text:
         return
     try:
-        # Determine conversation id: use the thread if present, otherwise start a new thread at this message's ts
+        # Determine conversation id: use the thread if present, otherwise start
+        # a new thread at this message's ts
         conversation_id = event.get("thread_ts") or event.get("ts")
         conv_lock = _get_conv_lock(conversation_id)
 
@@ -182,7 +177,8 @@ def on_dm_events(event, say):
                 thread_ts=conversation_id,
                 text=(
                     "Welkom! Ik genereer content voor je website en LinkedIn.\n\n"
-                    "Begin door een pagina te kiezen waarvoor we content gaan maken. Je kunt kiezen uit de volgende keywords:\n"
+                    "Begin door een pagina te kiezen waarvoor we content gaan"
+                    " maken. Je kunt kiezen uit de volgende keywords:\n"
                     f"{keywords_overview}\n\n"
                     "Vertel me daarna kort wat je nodig hebt. Geef in elk geval:\n"
                     "- Doelgroep\n"
@@ -190,7 +186,8 @@ def on_dm_events(event, say):
                     "- Belangrijke punten (moeten erin)\n"
                     "- Toon en stijl\n"
                     "- Lengte/format (bijv. 3–7 zinnen)\n\n"
-                    "Vervolgens kun je de output iteratief verbeteren door te reageren (bijv. 'korter', 'formeler', 'voeg CTA toe'). "
+                    "Vervolgens kun je de output iteratief verbeteren door te"
+                    " reageren (bijv. 'korter', 'formeler', 'voeg CTA toe'). "
                     "Typ 'reset' om opnieuw te beginnen."
                 ),
             )
@@ -212,7 +209,8 @@ def on_dm_events(event, say):
                 channel=event["channel"],
                 thread_ts=conversation_id,
                 text=(
-                    "Context gewist voor deze thread. Start met een nieuw keyword om content te genereren. Kies uit:  "
+                    "Context gewist voor deze thread. Start met een nieuw"
+                    " keyword om content te genereren. Kies uit:  "
                     f"{keywords_overview}."
                 ),
             )
@@ -238,16 +236,12 @@ def on_dm_events(event, say):
                 with conv_lock:
                     history: List[dict] = state.get("history", [])
                     if not history:
-                        history.append(
-                            {"role": "system", "content": state["page_content"]}
-                        )
+                        history.append({"role": "system", "content": state["page_content"]})
                     history.append({"role": "user", "content": user_text})
                     history = _cap_history(history)
                     state["history"] = history
 
-                draft = _call_llm_with_retry(
-                    history
-                )  # generate_content(page_key, history)
+                draft = _call_llm_with_retry(history)  # generate_content(page_key, history)
 
                 with conv_lock:
                     history.append({"role": "assistant", "content": draft})
@@ -269,8 +263,7 @@ def on_dm_events(event, say):
                     state["waiting_for_content_description"] = False
                     THREADS[conversation_id] = state
                 keywords_overview = ", ".join(
-                    f"`{PAGE_TO_DISPLAY_KEY[page]}`"
-                    for page in PAGE_TO_DISPLAY_KEY.keys()
+                    f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys()
                 )
                 say(
                     channel=event["channel"],
@@ -289,17 +282,18 @@ def on_dm_events(event, say):
             detected_page = detect_page_key(user_text)
             if detected_page:
                 page_content = build_system_prompt(detected_page)
-                # If we couldn't build content for the detected page, inform the user and ask to pick another keyword
+                # If we couldn't build content for the detected page, inform the
+                # user and ask to pick another keyword
                 if page_content is None:
                     keywords_overview = ", ".join(
-                        f"`{PAGE_TO_DISPLAY_KEY[page]}`"
-                        for page in PAGE_TO_DISPLAY_KEY.keys()
+                        f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys()
                     )
                     say(
                         channel=event["channel"],
                         thread_ts=conversation_id,
                         text=(
-                            "Ik kon geen content vinden voor deze pagina. Kies alsjeblieft een ander keyword.\n\n"
+                            "Ik kon geen content vinden voor deze pagina. Kies"
+                            " alsjeblieft een ander keyword.\n\n"
                             f"Beschikbare keywords: {keywords_overview}"
                         ),
                     )
@@ -314,9 +308,7 @@ def on_dm_events(event, say):
                 page_name = detected_page.lower().replace("_", " ")
                 is_linkedin = detected_page == "LINKEDIN"
                 titel = (
-                    "een LinkedIn-post"
-                    if is_linkedin
-                    else f"content voor de pagina `{page_name}`"
+                    "een LinkedIn-post" if is_linkedin else f"content voor de pagina `{page_name}`"
                 )
                 prompt_text = (
                     f"Hoi! Ik help je met het schrijven van {titel}.\n\n"
@@ -335,10 +327,10 @@ def on_dm_events(event, say):
                 )
                 return
             else:
-                # No page key detected, ask for clarification (NL) and show available keywords
+                # No page key detected, ask for clarification (NL) and show
+                # available keywords
                 keywords_overview = ", ".join(
-                    f"`{PAGE_TO_DISPLAY_KEY[page]}`"
-                    for page in PAGE_TO_DISPLAY_KEY.keys()
+                    f"`{PAGE_TO_DISPLAY_KEY[page]}`" for page in PAGE_TO_DISPLAY_KEY.keys()
                 )
                 say(
                     channel=event["channel"],
@@ -359,9 +351,7 @@ def on_dm_events(event, say):
             history = _cap_history(history)
             state["history"] = history
 
-        draft = _call_llm_with_retry(
-            history
-        )  # generate_content(state["page_key"], history)
+        draft = _call_llm_with_retry(history)  # generate_content(state["page_key"], history)
 
         with conv_lock:
             history.append({"role": "assistant", "content": draft})
@@ -379,7 +369,7 @@ def on_dm_events(event, say):
         say(
             channel=event["channel"],
             thread_ts=event.get("thread_ts") or event.get("ts"),
-            text=f"Sorry, I couldn’t generate that. Please try again.",
+            text="Sorry, I couldn’t generate that. Please try again.",
         )
         logging.exception(f"Error generating content: {e}")
 
