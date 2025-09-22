@@ -5,13 +5,14 @@ This module provides a tiny in-memory cache and HTML extraction using
 downstream consumption.
 """
 
+import logging
 import os
 from typing import Dict, Optional
 from urllib import request
 from urllib.parse import urljoin
+
 import trafilatura
 from bs4 import BeautifulSoup
-import logging
 
 WEBSITE_BASE_URL = os.getenv("WEBSITE_BASE_URL", "https://conduction.nl")
 
@@ -188,9 +189,7 @@ def _extract_text_from_html(html_str: str) -> str:
             tag.unwrap()
         else:
             tag.attrs = (
-                {"href": tag.get("href")}
-                if tag.name == "a" and tag.has_attr("href")
-                else {}
+                {"href": tag.get("href")} if tag.name == "a" and tag.has_attr("href") else {}
             )
 
     # Remove everything from the Contact section onward (this is our footer)
