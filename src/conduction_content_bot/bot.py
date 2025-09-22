@@ -9,7 +9,8 @@ from typing import Any, Dict, List
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-from .prompts import PAGE_TO_DISPLAY_KEY, build_system_prompt, detect_page_key
+
+from .prompts import build_system_prompt, detect_page_key, PAGE_TO_DISPLAY_KEY
 
 # --- Model wiring (OpenAI) ---
 try:

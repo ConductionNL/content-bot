@@ -11,8 +11,8 @@ from typing import Dict, Optional
 from urllib import request
 from urllib.parse import urljoin
 
-import trafilatura
 from bs4 import BeautifulSoup
+import trafilatura
 
 WEBSITE_BASE_URL = os.getenv("WEBSITE_BASE_URL", "https://conduction.nl")
 
