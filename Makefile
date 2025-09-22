@@ -1,19 +1,19 @@
 .PHONY: install dev-install run lint format docker-build docker-run
 
 install:
-	pip install -e .
+	uv sync --locked
 
 dev-install:
-	pip install -e ".[dev]"
+	uv sync --locked --extra dev
 
 run:
-	PYTHONPATH=src python -m conduction_content_bot
+	PYTHONPATH=src uv run python -m conduction_content_bot
 
 lint:
-	ruff check src
+	uv run ruff check src
 
 format:
-	black src
+	uv run black src
 
 docker-build:
 	docker build -t conduction-content-bot .
