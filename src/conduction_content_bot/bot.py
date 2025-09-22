@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from .prompts import PAGE_TO_DISPLAY_KEY, build_system_prompt, detect_page_key
 
 # --- Model wiring (OpenAI) ---
 try:
@@ -34,7 +35,6 @@ BACKOFF_BASE_SECONDS = float(os.getenv("LLM_BACKOFF_BASE_SECONDS", "1.0"))
 BACKOFF_MAX_SECONDS = float(os.getenv("LLM_BACKOFF_MAX_SECONDS", "15.0"))
 HISTORY_MAX_MESSAGES = int(os.getenv("HISTORY_MAX_MESSAGES", "10"))
 
-from .prompts import PAGE_TO_DISPLAY_KEY, build_system_prompt, detect_page_key
 
 if not APP_TOKEN or not BOT_TOKEN:
     print("Missing SLACK_APP_TOKEN or SLACK_BOT_TOKEN in environment", file=sys.stderr)
@@ -318,7 +318,9 @@ def on_dm_events(event, say):
                     "- Belangrijke punten/links (moeten erin)\n"
                     "- Toon en stijl (bijv. nuchter, professioneel, vriendelijk)\n"
                     "- Lengte/format (bijv. 3–7 zinnen, met CTA)\n\n"
-                    "Je kunt de output daarna iteratief verbeteren door te reageren (bijv. 'korter', 'formeler/menselijker', 'voeg CTA toe', '3 varianten')."
+                    "Je kunt de output daarna iteratief verbeteren door te"
+                    " reageren (bijv. 'korter', 'formeler/menselijker',"
+                    " 'voeg CTA toe', '3 varianten')."
                 )
                 say(
                     channel=event["channel"],
@@ -336,7 +338,9 @@ def on_dm_events(event, say):
                     channel=event["channel"],
                     thread_ts=conversation_id,
                     text=(
-                        "Ik kon geen keyword herkennen. Start je bericht met een keyword om de pagina te kiezen waarvoor we content gaan genereren.\n\n"
+                        "Ik kon geen keyword herkennen. Start je bericht met een"
+                        " keyword om de pagina te kiezen waarvoor we content gaan"
+                        " genereren.\n\n"
                         f"Herkende keywords: {keywords_overview}"
                     ),
                 )
