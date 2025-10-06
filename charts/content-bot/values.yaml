@@ -42,6 +42,8 @@ env:
   MAX_REFERENCE_CHARS: "6000"
   WEB_FETCH_TTL_SECONDS: "1800"
 
+secretRef: ""
+
 resources: {}
   # limits:
   #   cpu: 500m
