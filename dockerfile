@@ -15,4 +15,7 @@ COPY src/ /app/src/
 RUN uv sync --locked --no-dev
 
 ENV PYTHONUNBUFFERED=1
-CMD ["uv", "run", "python", "-m", "conduction_content_bot"]
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+CMD ["python", "-m", "conduction_content_bot"]
