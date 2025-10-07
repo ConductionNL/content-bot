@@ -32,8 +32,9 @@ jobs:
         shell: bash
         run: |
           SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
-          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/conduction-content-bot" >> $GITHUB_ENV
-          echo "TAGS=ghcr.io/${{ github.repository_owner }}/conduction-content-bot:sha-${SHORT_SHA},ghcr.io/${{ github.repository_owner }}/conduction-content-bot:latest" >> $GITHUB_ENV
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=ghcr.io/${OWNER_LC}/conduction-content-bot" >> $GITHUB_ENV
+          echo "TAGS=ghcr.io/${OWNER_LC}/conduction-content-bot:sha-${SHORT_SHA},ghcr.io/${OWNER_LC}/conduction-content-bot:latest" >> $GITHUB_ENV
       - uses: docker/build-push-action@v6
         with:
           context: .
