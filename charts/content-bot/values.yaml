@@ -1,20 +1,15 @@
 image:
   repository: ghcr.io/conductionnl/conduction-content-bot
-  tag: latest
+  tag: sha-7af285f
   pullPolicy: Always
-
 imagePullSecrets: []
-
 replicaCount: 1
-
 podAnnotations: {}
-
 podSecurityContext:
   runAsUser: 10001
   runAsGroup: 10001
   fsGroup: 10001
   runAsNonRoot: true
-
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -22,7 +17,6 @@ securityContext:
     drop: ["ALL"]
   seccompProfile:
     type: RuntimeDefault
-
 env:
   # Required secrets (set via ArgoCD/ExternalSecrets, don't commit real values):
   # SLACK_APP_TOKEN: xapp-...
@@ -37,27 +31,21 @@ env:
   LLM_BACKOFF_MAX_SECONDS: "15.0"
   HISTORY_MAX_MESSAGES: "10"
   WEBSITE_BASE_URL: https://conduction.nl
-
   # Currently not used by the code, kept for future compatibility
   MAX_REFERENCE_CHARS: "6000"
   WEB_FETCH_TTL_SECONDS: "1800"
-
 secretRef: ""
-
 resources: {}
-  # limits:
-  #   cpu: 500m
-  #   memory: 512Mi
-  # requests:
-  #   cpu: 50m
-  #   memory: 128Mi
+# limits:
+#   cpu: 500m
+#   memory: 512Mi
+# requests:
+#   cpu: 50m
+#   memory: 128Mi
 
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
-
 networkPolicy:
   enabled: true
   egress:
@@ -71,4 +59,3 @@ networkPolicy:
       - port: 53
         protocol: TCP
     toCIDRs: []
-
