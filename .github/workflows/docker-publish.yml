@@ -56,10 +56,14 @@ jobs:
         run: |
           SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
           TAG="sha-${SHORT_SHA}"
+          echo "Setting image.tag to: ${TAG}"
           yq -i '.image.tag = strenv(TAG)' charts/content-bot/values.yaml
+          echo "Updated values.yaml:"
+          cat charts/content-bot/values.yaml | head -5
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          git checkout main
           git add charts/content-bot/values.yaml
           git diff --cached --quiet || git commit -m "chore: bump image tag to ${TAG} [skip ci]"
-          git push origin HEAD:main
+          git push origin main
 
