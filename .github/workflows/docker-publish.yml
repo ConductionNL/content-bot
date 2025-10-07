@@ -52,11 +52,8 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
 
       - name: Bump Helm image.tag to commit SHA and push to main [skip ci]
-        env:
-          TAG: sha-${{ steps.prep.outputs.short_sha }}
         shell: bash
         run: |
-          # Recompute TAG from the same SHORT_SHA to avoid output wiring
           SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
           TAG="sha-${SHORT_SHA}"
           yq -i '.image.tag = strenv(TAG)' charts/content-bot/values.yaml
