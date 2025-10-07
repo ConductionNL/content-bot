@@ -1,0 +1,45 @@
+name: GHCR retention cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # weekly on Sunday 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  prune-old-images:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Prune to last 30 tags (keep latest)
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO: conduction-content-bot
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/$OWNER_LC/$REPO"
+
+          # List tags sorted by update time desc, exclude 'latest'
+          TAGS=$(gh api -H "Accept: application/vnd.github+json" \
+            "/users/$OWNER_LC/packages/container/$REPO/versions?per_page=100" | \
+            jq -r '.[] | {id: .id, tags: .metadata.container.tags} | select(.tags != null) | select((.tags | index("latest")) | not) | @json')
+
+          # Keep last 30 versions, delete the rest
+          COUNT=0
+          while IFS= read -r item; do
+            COUNT=$((COUNT+1))
+            if [ "$COUNT" -le 30 ]; then
+              continue
+            fi
+            ID=$(echo "$item" | jq -r '.id')
+            echo "Deleting package version id=$ID"
+            gh api -X DELETE -H "Accept: application/vnd.github+json" \
+              "/users/$OWNER_LC/packages/container/$REPO/versions/$ID" || true
+          done < <(echo "$TAGS")
+
+          echo "Retention cleanup complete; kept last 30 (plus 'latest')."
+
