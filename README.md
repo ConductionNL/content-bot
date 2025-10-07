@@ -56,16 +56,6 @@ make run
 PYTHONPATH=src uv run python -m conduction_content_bot
 ```
 
-### Makefile targets
-```bash
-make install       # uv sync --locked
-make dev-install   # uv sync --locked --extra dev
-make run           # PYTHONPATH=src uv run python -m conduction_content_bot
-make lint          # uv run ruff check src
-make format        # uv run black src
-make docker-build  # docker build -t conduction-content-bot .
-make docker-run    # docker run --rm --env-file .env --name conduction-content-bot conduction-content-bot
-```
 
 ## Run with Docker
 Build image:
@@ -81,7 +71,12 @@ docker run --rm \
   conduction-content-bot
 ```
 
-Note: The Docker image installs runtime dependencies using `uv sync --locked --no-dev` from `uv.lock` for reproducible builds and runs the app via `uv run`.
+Note: The Docker image installs runtime dependencies using `uv sync --locked --no-dev` from `uv.lock` for reproducible builds and runs the app directly with Python.
 
 ### Run with Docker Compose
+```bash
+# Create .env file first (see step 3 above)
+docker-compose up --build
 ```
+
+The compose file uses `network_mode: "host"` for Slack Socket Mode connectivity.
