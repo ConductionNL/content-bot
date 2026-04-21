@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/conductionnl/conduction-content-bot
-  tag: "sha-be67f4b"
+  tag: "sha-5e15ca4"
   pullPolicy: Always
 imagePullSecrets: []
 replicaCount: 1
